@@ -1,14 +1,13 @@
-package main
+package delcodoor
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 )
 
-func main() {
+func init() {
 	http.HandleFunc("/", defaultHandler)
-	log.Fatal(http.ListenAndServe("localhost:8080", nil))
+	// log.Fatal(http.ListenAndServe("localhost:8080", nil))
 }
 
 const response = `
