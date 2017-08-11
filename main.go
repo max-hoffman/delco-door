@@ -38,7 +38,7 @@ func init() {
 const (
 	welcome = `<?xml version="1.0" encoding="UTF-8"?>
 	<Response>
-		<Say voice="woman">It is Wednesday my dudes.</Say>
+		<Say voice="woman">Science is boneless math. Please enter the password:</Say>
 		<Record timeout="2"/>
 	</Response>
 `
