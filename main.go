@@ -1,7 +1,10 @@
 package delcodoor
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -11,6 +14,20 @@ import (
 	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/urlfetch"
 )
+
+var speechURL = " https://speech.googleapis.com/v1/speech:recognize?key=" +
+	os.Getenv("SPEECH_API_KEY")
+
+type speechRequest struct {
+	Audio struct {
+		Content string `json:"content"`
+	} `json:"config"`
+	Config struct {
+		Encoding        string `json:"encoding"`
+		SampleRateHertz int    `json:"sampleRateHertz"`
+		LanguageCode    string `json:"languageCode"`
+	} `json:"audio"`
+}
 
 func init() {
 	http.HandleFunc("/", defaultHandler)
@@ -76,7 +93,6 @@ func transcribe(c context.Context, url string) (string, error) {
 }
 
 func fetchAudio(c context.Context, url string) ([]byte, error) {
-	//download url
 	client := urlfetch.Client(c)
 	res, err := client.Get(url)
 	if err != nil {
@@ -86,7 +102,6 @@ func fetchAudio(c context.Context, url string) ([]byte, error) {
 		return nil, fmt.Errorf("failed with status: %v", res.Status)
 	}
 
-	//base64 encode
 	defer res.Body.Close()
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
@@ -95,8 +110,47 @@ func fetchAudio(c context.Context, url string) ([]byte, error) {
 	return body, nil
 }
 
-var speechURL = " https://speech.googleapis.com/v1/speech:recognize?key=" + os.Getenv("SPEECH_API_KEY")
+func fetchTranscription(c context.Context, b []byte) (string, error) {
+	var req speechRequest
+	req.Audio.Content = base64.StdEncoding.EncodeToString(b)
+	req.Config.Encoding = "LINEAR16"
+	req.Config.SampleRateHertz = 8000
+	req.Config.LanguageCode = "en-US"
 
-func fetchTranscription(c context.Context, bytes []byte) (string, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to encode speechrequest as json string: %v", err)
+	}
 
+	result, err := urlfetch.Client(c).Post(speechURL, "application/json", bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("speech api post failed with error: %v", err)
+	}
+
+	var data struct {
+		Error struct {
+			Code    int
+			Message string
+			Status  string
+		}
+		Results []struct {
+			Alternatives []struct {
+				Transcript string
+				Confidence float64
+			}
+		}
+	}
+
+	defer result.Body.Close()
+	if err := json.NewDecoder(result.Body).Decode(&data); err != nil {
+		return "", fmt.Errorf("failed to decode speech response with error: %v", err)
+	}
+	if data.Error.Code != 0 {
+		return "", fmt.Errorf("speech API failed: %d %s %s",
+			data.Error.Code, data.Error.Status, data.Error.Message)
+	}
+	if len(data.Results) == 0 || len(data.Results[0].Alternatives) == 0 {
+		return "", fmt.Errorf("no transcriptions found")
+	}
+	return data.Results[0].Alternatives[0].Transcript, nil
 }
