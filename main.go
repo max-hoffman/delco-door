@@ -2,7 +2,6 @@ package delcodoor
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -10,23 +9,25 @@ import (
 	"net/http"
 	"os"
 
+	"golang.org/x/net/context"
+
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/urlfetch"
 )
 
-var speechURL = " https://speech.googleapis.com/v1/speech:recognize?key=" +
+var speechURL = "https://speech.googleapis.com/v1/speech:recognize?key=" +
 	os.Getenv("SPEECH_API_KEY")
 
 type speechRequest struct {
 	Audio struct {
 		Content string `json:"content"`
-	} `json:"config"`
+	} `json:"audio"`
 	Config struct {
 		Encoding        string `json:"encoding"`
 		SampleRateHertz int    `json:"sampleRateHertz"`
 		LanguageCode    string `json:"languageCode"`
-	} `json:"audio"`
+	} `json:"config"`
 }
 
 func init() {
@@ -48,8 +49,8 @@ const (
 `
 	accept = `<?xml version="1.0" encoding="UTF-8"?>
 	<Response>
-		<Say voice="woman">Welcome to Delco.</Say>
 		<Play digits="9"></Play>
+		<Say voice="woman">Welcome to Delco.</Say>
 	</Response>
 `
 	reject = `<?xml version="1.0" encoding="UTF-8"?>
@@ -72,12 +73,12 @@ func defaultHandler(w http.ResponseWriter, r *http.Request) {
 	text, err := transcribe(context, recording)
 	if err != nil {
 		http.Error(w, "could not transcribe recording", http.StatusInternalServerError)
-		log.Errorf(context, "could not transcribe %v", recording)
+		log.Errorf(context, "could not transcribe %v \n %v", recording, err)
 		return
 	}
 
-	if text == "squidward" {
-		fmt.Print(w, accept)
+	if text == "tentacles" {
+		fmt.Fprint(w, accept)
 		return
 	}
 	fmt.Fprint(w, reject)
@@ -152,5 +153,6 @@ func fetchTranscription(c context.Context, b []byte) (string, error) {
 	if len(data.Results) == 0 || len(data.Results[0].Alternatives) == 0 {
 		return "", fmt.Errorf("no transcriptions found")
 	}
+	log.Infof(c, "guessed password: %s", data.Results[0].Alternatives[0].Transcript)
 	return data.Results[0].Alternatives[0].Transcript, nil
 }
